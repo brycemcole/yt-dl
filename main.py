@@ -18,6 +18,8 @@ class Downloader:
         self.iids = []
         self.app = tk.Tk()
         self.app.geometry("800x540")
+        self.app.resizable(False, False)
+        self.app.title("YouTube Audio Downloader")
 
         self.app.rowconfigure(0, weight=1)
         self.app.rowconfigure(1, weight=1)

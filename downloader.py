@@ -11,6 +11,13 @@ class YTDownloader:
         self.file_format = file_format
         self.size_in_mb = 0
         self.file_title = self.yt.title
+
+    def get_exact_filesize_in_mb(self, filename):
+        # Get file size in bytes
+        file_size_bytes = os.path.getsize(filename)
+        # Convert to MB
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        return round(file_size_mb, 1)
     
     def download_audio(self, download_directory):
         os.makedirs(download_directory, exist_ok=True)  # Ensure the directory exists
@@ -25,8 +32,6 @@ class YTDownloader:
 
             # select first audio stream
             audio = audio_streams[0]
-            self.size_in_mb = str(round(audio.filesize / (1024 * 1024), 1)) + " MB"
-
             print("Downloading audio")
             default_filename = audio.download(output_path=download_directory)
             self.filename = os.path.basename(default_filename)
@@ -38,6 +43,8 @@ class YTDownloader:
                 AudioSegment.from_file(default_filename).export(new_filename, format=self.file_format)
                 os.remove(default_filename)
                 self.filename = os.path.basename(new_filename)
+
+            self.size_in_mb = str(self.get_exact_filesize_in_mb(os.path.join(download_directory, self.filename))) + " MB"
 
             return self.filename
         
