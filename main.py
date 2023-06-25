@@ -3,37 +3,19 @@ from tkinter import ttk
 from downloader import YTDownloader
 from queue import Queue
 import os
+import json
 from random import randint
 from datetime import datetime
-from ttkthemes import ThemedStyle
 import threading
 
 class Downloader:
     def __init__(self):
-        working_directory = os.getcwd()
-        files = os.listdir()
-        hasDownloads = 'downloads' in files
-        self.download_directory = working_directory + "/downloads/"
-
-        # TODO check if downloads folder exists
-
-        if not hasDownloads:
-            print("downloads folder not found, creating folder.")
-            os.mkdir('downloads')
-            hasDownloads = 'downloads' in files
-        else: 
-            print("downloads folder found.")
-            os.chdir(self.download_directory)
-            files = os.listdir()
-            for file in files:
-                pass
-
-
+        self.LOG_FILE = "log.json"
+        self.download_directory = os.path.join(os.getcwd(), 'downloads')
         self.data = [
             # (index, song, date, size, link)
         ]
-        self.iids = ()
-
+        self.iids = []
         self.app = tk.Tk()
         self.app.geometry("800x540")
 
@@ -56,7 +38,7 @@ class Downloader:
         
 
         # download bar which is rendered to the title frame
-        self.downloadbar = ttk.Progressbar(
+        '''self.downloadbar = ttk.Progressbar(
             self.titleframe, 
             orient=tk.HORIZONTAL,
             length=200, 
@@ -68,7 +50,7 @@ class Downloader:
             column=1,
             pady=10, 
             padx=14,
-            sticky="e")
+            sticky="e")'''
 
         self.titleframe.grid_columnconfigure(0, weight=1)
         self.titleframe.grid_columnconfigure(1, weight=1)
@@ -142,53 +124,69 @@ class Downloader:
         self.start()
     
     def update_data(self):
-        count = 0
-        for record in self.data:
-            self.tree.insert(
-                parent='', 
-                index=tk.END, 
-                iid=str(count), 
-                text="", 
-                values=(record[0], record[1], record[2]))
-            count += 1
+        if os.path.exists(self.LOG_FILE):
+                print("log.json found, loading logs")
+                with open(self.LOG_FILE, 'r') as file:
+                    lines = file.readlines()
+                
+                logs = [json.loads(line) for line in lines]
+                logs.sort(key= lambda x: x['timestamp'])
 
-    def download_and_save(self):
-        self.submitbtn.config(state=tk.DISABLED)
-        url = self.linkentry.get() 
-        file_format = self.formatcombovar.get()
+                for log in logs:
+                    self.iids.append(log['index'])
+                    self.tree.insert("", 0, iid=log['index'], values=(log['filename'], log['formatted_timestamp'], log['size'], log['link']))
 
-        # create the youtube instance
-        yt = YTDownloader(url, self.on_progress, file_format) 
-        yt_title = yt.get_title()
-        yt.download_audio(self.download_directory)
+    def add_data(self, metadata, timestamp):
+        # metadata = (filename, date, size, link)
 
-        now = datetime.now()
-        format = '%Y-%m-%d %H:%M %p'
-        downloaded_time = now.strftime("%B %d, %Y, %I:%M %p")
-
-        #yt_filename = yt.filename
-        yt_size = yt.size_in_mb 
-
-        t = (yt_title, downloaded_time,yt_size, url)
-
+        # generate random id for the treeview, idk why needed.
         rand_iid = randint(0, 32000)
-
         if rand_iid in self.iids:
             while rand_iid in self.iids:
                 rand_iid = randint(0, 32000)
 
-        self.tree.insert(parent='', index=0, iid=str(rand_iid), text="", values=t)
+        log_entry = {
+            'index': rand_iid,
+            'filename': metadata[0],
+            'formatted_timestamp': metadata[1],
+            'size': metadata[2],
+            'link': metadata[3],
+            'timestamp': timestamp.isoformat()
 
-        print(f'{url} downloaded')
-        self.data.insert(0, t)
+        }
+
+        with open(self.LOG_FILE, 'a') as file:
+            json.dump(log_entry, file)
+            file.write('\n')
+
+        self.tree.insert(parent='', index=0, iid=str(rand_iid), text="", values=metadata)
+        self.data.insert(0, metadata)
+        self.iids.append(rand_iid)
+
+
+
+    def download_and_save(self):
+        self.submitbtn.config(state=tk.DISABLED)
+        
+        yt_video_url = self.linkentry.get() 
+        user_file_format = self.formatcombovar.get()
+
+        # create the youtube instance
+        yt = YTDownloader(yt_video_url, user_file_format) 
+
+        # this is sooo janky dude please dont judge but this is how i made it work, deal with it.
+        filename = yt.download_audio(self.download_directory)
+        timestamp = datetime.now()
+
+        # collect video meta data for saving.
+        yt_download_time = timestamp.strftime("%B %d, %Y, %I:%M %p")
+        yt_filedata = (filename, yt_download_time, yt.size_in_mb , yt_video_url)
+
+        # add the data to the treeview
+        self.add_data(yt_filedata, timestamp)
+
+        print(f'{yt_video_url} downloaded')
         self.submitbtn.config(state=tk.NORMAL)
-
-    def on_progress(self, stream, chunk, bytes_remaining):
-        total_size = stream.filesize
-        bytes_downloaded = total_size - bytes_remaining
-        percentage_of_completion = (bytes_downloaded / total_size) * 100
-        self.downloadbar['value'] = percentage_of_completion
-        self.app.update_idletasks()
 
 
     def start(self):

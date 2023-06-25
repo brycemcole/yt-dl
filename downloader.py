@@ -4,16 +4,17 @@ import os
 
 
 class YTDownloader:
-    def __init__(self, url, on_progress, file_format="mp3"):
+    def __init__(self, url, file_format="mp3"):
         self.url = url
         self.yt = YouTube(url)
         self.filename = ""
         self.file_format = file_format
         self.size_in_mb = 0
+        self.file_title = self.yt.title
     
     def download_audio(self, download_directory):
+        os.makedirs(download_directory, exist_ok=True)  # Ensure the directory exists
         try:
-            os.chdir(download_directory)
             # filter out the audio streams from yt.stream
             audio_streams = self.yt.streams.filter(only_audio=True)
 
@@ -24,34 +25,23 @@ class YTDownloader:
 
             # select first audio stream
             audio = audio_streams[0]
-            
-            
-            self.size_in_mb = round(audio.filesize / (1024 * 1024), 1)
+            self.size_in_mb = str(round(audio.filesize / (1024 * 1024), 1)) + " MB"
 
             print("Downloading audio")
-            audio.download(output_path=download_directory)
+            default_filename = audio.download(output_path=download_directory)
+            self.filename = os.path.basename(default_filename)
 
-            default_filename = download_directory + audio.default_filename
+            if self.file_format and self.file_format not in ['mp3', 'wav', 'm4a']:
+                print(f'Invalid file format: {self.file_format}, defaulting to original format')
+            elif self.file_format and self.file_format != audio.subtype:
+                new_filename = os.path.join(download_directory, os.path.splitext(self.filename)[0] + '.' + self.file_format)
+                AudioSegment.from_file(default_filename).export(new_filename, format=self.file_format)
+                os.remove(default_filename)
+                self.filename = os.path.basename(new_filename)
 
-            new_filename = os.path.splitext(default_filename)[0] + ".mp3"
-            os.rename(default_filename, new_filename)
-
-            if self.file_format == "wav":
-                print("converting to wav file")
-                input_audio = AudioSegment.from_mp3(new_filename)
-                input_audio.export(new_filename, format="wav")
-                new_filename = os.path.splitext(new_filename)[0] + ".wav"
-            elif self.file_format == "m4a":
-                input_audio = AudioSegment.from_mp3(new_filename)
-                input_audio.export(new_filename, format="m4a")
-                new_filename = os.path.splitext(new_filename)[0] + ".m4a"
-            
-            self.filename = new_filename
-            print(f"Audio successfully downloaded as {new_filename}")
+            return self.filename
         
         except Exception as e:
             print(f'Error: {str(e)}')
     
-    def get_title(self):
-        return self.yt.title
         
